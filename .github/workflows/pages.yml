@@ -2,7 +2,8 @@ name: Deploy wildlife viewer
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -16,19 +17,22 @@ concurrency:
 
 jobs:
   deploy:
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v5
-      - name: Configure Pages
+
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-      - name: Upload Pages artifact
+
+      - name: Upload site
         uses: actions/upload-pages-artifact@v4
         with:
           path: .
-      - name: Deploy to Pages
+
+      - name: Deploy site
         id: deployment
         uses: actions/deploy-pages@v4
