@@ -1,0 +1,4 @@
+{
+  "2_2026-09-15_12-38-24_377.mp4": "",
+  "_README": "Add a clip filename as a key and its public description as the value. Descriptions are read by the website and shown to every viewer when that clip is selected. The migration will preserve this metadata for existing filenames."
+}
