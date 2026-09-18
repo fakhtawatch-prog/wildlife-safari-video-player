@@ -6,7 +6,7 @@ on:
       max_files:
         description: 'Maximum new MP4 files to migrate in this run'
         required: true
-        default: '3'
+        default: '10'
         type: string
   schedule:
     - cron: '*/30 * * * *'
@@ -30,6 +30,6 @@ jobs:
       - name: Migrate one-file-at-a-time
         env:
           DRIVE_INDEX_URL: ${{ secrets.DRIVE_INDEX_URL }}
-          MAX_FILES: ${{ inputs.max_files || '3' }}
+          MAX_FILES: ${{ inputs.max_files || '10' }}
           GH_TOKEN: ${{ github.token }}
         run: python scripts/migrate_drive.py
