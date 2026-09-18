@@ -29,18 +29,26 @@ def folder_id_from_url(url):
 
 
 def list_files():
-    """List top-level MP4s without resolving every public download URL.
+    """List only top-level MP4s from the public Drive folder.
 
-    This intentionally parses Drive's embedded folder view directly. The
-    previous gdown --json path tried to resolve each file URL while building
-    the listing and aborted the entire folder when one file could not be
-    resolved. One inaccessible/non-public item must not prevent the other
-    public MP4s from being migrated.
+    This uses gdown's embedded-folder parser only for discovery. It does not
+    recursively enter child folders, and it does not resolve download URLs
+    until an individual MP4 is actually selected for migration.
     """
     folder_id = folder_id_from_url(FOLDER_URL)
-    sess, cookies_file = _get_session(use_cookies=False, return_cookies_file=True)
+    sess, _ = _get_session(
+        proxy=None,
+        use_cookies=False,
+        user_agent=None,
+        cookies_file=None,
+    )
     try:
-        result = _parse_embedded_folder_view(sess=sess, folder_id=folder_id)
+        result = _parse_embedded_folder_view(
+            sess=sess,
+            folder_id=folder_id,
+            verify=True,
+            timeout=30,
+        )
     finally:
         sess.close()
 
@@ -86,7 +94,7 @@ def duration(path):
 
 
 def download_public_file(file, path):
-    """Download a single public Drive file with gdown."""
+    """Download one public Drive file with gdown."""
     try:
         result = gdown.download(
             url=file['downloadUrl'],
@@ -94,6 +102,8 @@ def download_public_file(file, path):
             quiet=False,
             resume=True,
             use_cookies=False,
+            timeout=60,
+            retries=2,
         )
         if not result:
             raise RuntimeError('gdown returned no output path')
