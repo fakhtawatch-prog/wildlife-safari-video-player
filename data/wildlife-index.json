@@ -1,12 +1,66 @@
 {
   "version": 1,
   "days": {
-    "2026-09-18": [
+    "2026-09-15": [
       {
-        "name": "Demo placeholder — replace with migrated footage",
-        "startTime": "2026-09-18T00:00:00",
-        "duration": 30,
-        "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+        "name": "2_2026-09-15_12-38-24_377.mp4",
+        "startTime": "2026-09-15T12:38:24",
+        "duration": 18.473,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_12-38-24_377.mp4"
+      },
+      {
+        "name": "2_2026-09-15_12-38-45_076.mp4",
+        "startTime": "2026-09-15T12:38:45",
+        "duration": 906.058,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_12-38-45_076.mp4"
+      },
+      {
+        "name": "2_2026-09-15_12-53-46_876.mp4",
+        "startTime": "2026-09-15T12:53:46",
+        "duration": 901.433,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_12-53-46_876.mp4"
+      },
+      {
+        "name": "2_2026-09-15_13-08-48_676.mp4",
+        "startTime": "2026-09-15T13:08:48",
+        "duration": 22.312,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_13-08-48_676.mp4"
+      },
+      {
+        "name": "2_2026-09-15_13-41-56_777.mp4",
+        "startTime": "2026-09-15T13:41:56",
+        "duration": 25.152,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_13-41-56_777.mp4"
+      },
+      {
+        "name": "2_2026-09-15_13-47-02_777.mp4",
+        "startTime": "2026-09-15T13:47:02",
+        "duration": 25.17,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_13-47-02_777.mp4"
+      },
+      {
+        "name": "2_2026-09-15_13-59-26_177.mp4",
+        "startTime": "2026-09-15T13:59:26",
+        "duration": 25.162,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_13-59-26_177.mp4"
+      },
+      {
+        "name": "2_2026-09-15_14-00-22_878.mp4",
+        "startTime": "2026-09-15T14:00:22",
+        "duration": 31.435,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_14-00-22_878.mp4"
+      },
+      {
+        "name": "2_2026-09-15_14-01-23_182.mp4",
+        "startTime": "2026-09-15T14:01:23",
+        "duration": 399.544,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_14-01-23_182.mp4"
+      },
+      {
+        "name": "2_2026-09-15_14-46-26_992.mp4",
+        "startTime": "2026-09-15T14:46:26",
+        "duration": 13.468,
+        "url": "https://github.com/fakhtawatch-prog/wildlife-safari-video-player/releases/download/2026-09-15/2_2026-09-15_14-46-26_992.mp4"
       }
     ]
   }
