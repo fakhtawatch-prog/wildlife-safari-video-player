@@ -25,11 +25,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python dependencies
-        run: python -m pip install --upgrade requests
+        run: python -m pip install --upgrade requests gdown
 
       - name: Migrate one-file-at-a-time
         env:
-          DRIVE_INDEX_URL: ${{ secrets.DRIVE_INDEX_URL }}
+          DRIVE_FOLDER_URL: 'https://drive.google.com/drive/folders/11Z1EHFmU9Qj64CpHgD6uM2MG-SLc9YTI?usp=drive_link'
           MAX_FILES: ${{ inputs.max_files || '10' }}
           GH_TOKEN: ${{ github.token }}
         run: python scripts/migrate_drive.py
