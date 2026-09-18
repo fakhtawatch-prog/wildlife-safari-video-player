@@ -1,11 +1,7 @@
 const $=s=>document.querySelector(s);
-const state={index:null,date:null,i:-1,activity:false,musicOn:false,musicIndex:0};
-const video=$('#video'), select=$('#dateSelect'), timeline=$('#timeline'), music=$('#music');
-const musicPlaylist=[
-  {title:'Sleep',artist:'Scott Buckley',url:'https://www.scottbuckley.com.au/library/wp-content/uploads/2019/08/sb_sleep.mp3'},
-  {title:'She Moved Mountains',artist:'Scott Buckley',url:'https://www.scottbuckley.com.au/library/wp-content/uploads/2014/07/sb_shemovedmountains.mp3'},
-  {title:'There is a Place',artist:'Scott Buckley',url:'https://www.scottbuckley.com.au/library/wp-content/uploads/2019/04/sb_thereisaplace.mp3'}
-];
+const state={index:null,date:null,i:-1,activity:false,musicOn:false,musicIndex:0,musicSounds:[],musicReady:false};
+const video=$('#video'),select=$('#dateSelect'),timeline=$('#timeline');
+const musicWidget=window.SC?SC.Widget($('#scMusic')):null;
 function fmt(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?`${h}h ${m}m ${s}s`:`${m}m ${s}s`}
 function fmtTime(iso){return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
 function dayItems(){return state.index?.days?.[state.date]||[]}
@@ -21,11 +17,9 @@ $('#timelineBtn').onclick=()=>{const sec=$('#timelineSection'),hidden=sec.style.
 $('#fullscreenBtn').onclick=()=>video.requestFullscreen?.();
 document.addEventListener('keydown',e=>{if(['INPUT','SELECT','BUTTON'].includes(document.activeElement.tagName))return;if(e.code==='Space'){e.preventDefault();video.paused?video.play():video.pause()}if(e.key==='ArrowLeft')video.currentTime=Math.max(0,video.currentTime-5);if(e.key==='ArrowRight')video.currentTime+=5;if(e.key==='ArrowUp')state.i>=0&&load(Math.max(state.i-1,0),true);if(e.key==='ArrowDown')state.i>=0&&load(Math.min(dayItems().length-1,state.i+1),true);if(e.key.toLowerCase()==='f')$('#fullscreenBtn').click();if(e.key.toLowerCase()==='m')video.muted=!video.muted});
 function renderChapters(){const c=$('#chapters');c.innerHTML=dayItems().length?'<p style="color:#888">Chapter controls will appear when chapter metadata is populated.</p>':'<p style="color:#888">Chapters will appear with imported footage.</p>'}
-function updateMusicLabel(){const t=musicPlaylist[state.musicIndex];$('#musicTrack').textContent=state.musicOn?`Music: ${t.title} — ${t.artist}`:'Music is off.'}
-function playMusicTrack(index){if(!musicPlaylist.length)return;state.musicIndex=(index+musicPlaylist.length)%musicPlaylist.length;const t=musicPlaylist[state.musicIndex];music.src=t.url;music.volume=+$('#musicVolume').value;updateMusicLabel();music.play().catch(()=>{state.musicOn=false;$('#musicBtn').textContent='Music: OFF';updateMusicLabel()})}
-function stopMusic(){music.pause();music.removeAttribute('src');music.load();state.musicOn=false;$('#musicBtn').textContent='Music: OFF';updateMusicLabel()}
-music.addEventListener('ended',()=>{if(state.musicOn)playMusicTrack(state.musicIndex+1)});
-$('#musicVolume').oninput=e=>music.volume=+e.target.value;
-$('#musicBtn').onclick=()=>{if(state.musicOn)stopMusic();else{state.musicOn=true;$('#musicBtn').textContent='Music: ON';playMusicTrack(state.musicIndex)}};
-updateMusicLabel();
+function musicReady(){if(!musicWidget)return;state.musicReady=true;musicWidget.getSounds(sounds=>{state.musicSounds=sounds||[];const total=state.musicSounds.reduce((sum,s)=>sum+(Number(s.duration)||0),0)/1000;$('#musicTrack').textContent=`Music: Scott Buckley · ${state.musicSounds.length} tracks · ${fmt(total)} available`;});musicWidget.setVolume(Math.round((+$('#musicVolume').value)*100));}
+function updateMusicLabel(){if(!state.musicOn){$('#musicTrack').textContent='Music is off.';return;}musicWidget?.getCurrentSound(sound=>{if(sound?.title)$('#musicTrack').textContent=`Music: ${sound.title} — ${sound.user?.username||'Scott Buckley'}`;});}
+if(musicWidget){musicWidget.bind(SC.Widget.Events.READY,musicReady);musicWidget.bind(SC.Widget.Events.PLAY,updateMusicLabel);musicWidget.bind(SC.Widget.Events.FINISH,()=>{if(!state.musicOn)return;if(!state.musicSounds.length){musicWidget.next();return;}musicWidget.getCurrentSoundIndex(index=>{if(index>=state.musicSounds.length-1)musicWidget.skip(0);else musicWidget.next();});});musicWidget.bind(SC.Widget.Events.ERROR,e=>console.error('Music widget error',e));}
+$('#musicVolume').oninput=e=>musicWidget?.setVolume(Math.round((+e.target.value)*100));
+$('#musicBtn').onclick=()=>{if(!musicWidget)return;if(state.musicOn){state.musicOn=false;musicWidget.pause();$('#musicBtn').textContent='Music: OFF';$('#musicTrack').textContent='Music is off.';}else{state.musicOn=true;$('#musicBtn').textContent='Music: ON';musicWidget.play();updateMusicLabel();}};
 fetch('data/wildlife-index.json').then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}).then(x=>{state.index=x;renderDays()}).catch(e=>{$('#videoStatus').textContent='Unable to load metadata index.';console.error(e)});
