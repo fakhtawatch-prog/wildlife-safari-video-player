@@ -1,4 +1,13 @@
 {
   "version": 1,
-  "days": {}
+  "days": {
+    "2026-09-18": [
+      {
+        "name": "Demo placeholder — replace with migrated footage",
+        "startTime": "2026-09-18T00:00:00",
+        "duration": 30,
+        "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+      }
+    ]
+  }
 }
