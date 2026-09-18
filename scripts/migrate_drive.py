@@ -1,13 +1,14 @@
 import json, os, re, subprocess, tempfile
 from pathlib import Path
-import requests
+
 import gdown
+from gdown.download_folder import _GoogleDriveFile, _get_session, _parse_embedded_folder_view
 
 FOLDER_URL = os.environ.get(
     'DRIVE_FOLDER_URL',
     'https://drive.google.com/drive/folders/11Z1EHFmU9Qj64CpHgD6uM2MG-SLc9YTI?usp=drive_link'
 )
-MAX_FILES = int(os.getenv('MAX_FILES', '3'))
+MAX_FILES = int(os.getenv('MAX_FILES', '10'))
 REPO = os.environ['GITHUB_REPOSITORY']
 MANIFEST = Path('data/transfer-manifest.json')
 INDEX = Path('data/wildlife-index.json')
@@ -20,41 +21,50 @@ def load_json(path, default):
         return default
 
 
+def folder_id_from_url(url):
+    m = re.search(r'/folders/([A-Za-z0-9_-]+)', url)
+    if not m:
+        raise RuntimeError(f'Could not extract Google Drive folder ID from {url}')
+    return m.group(1)
+
+
 def list_files():
-    """List only top-level MP4s in the shared Drive folder.
+    """List top-level MP4s without resolving every public download URL.
 
-    gdown uses Drive's embedded folder view and supports folders larger than
-    the old 50-file limit. Subfolders are deliberately excluded by requiring
-    a top-level path (no '/').
+    This intentionally parses Drive's embedded folder view directly. The
+    previous gdown --json path tried to resolve each file URL while building
+    the listing and aborted the entire folder when one file could not be
+    resolved. One inaccessible/non-public item must not prevent the other
+    public MP4s from being migrated.
     """
-    result = subprocess.run(
-        ['gdown', FOLDER_URL, '--json', '--quiet'],
-        capture_output=True, text=True, timeout=180
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            'Google Drive folder listing failed. '
-            f'exit={result.returncode}\nstdout={result.stdout[-2000:]}\nstderr={result.stderr[-4000:]}'
-        )
+    folder_id = folder_id_from_url(FOLDER_URL)
+    sess, cookies_file = _get_session(use_cookies=False, return_cookies_file=True)
     try:
-        entries = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            'Google Drive folder listing did not return JSON. '
-            f'stdout={result.stdout[-4000:]}\nstderr={result.stderr[-2000:]}'
-        ) from exc
+        result = _parse_embedded_folder_view(sess=sess, folder_id=folder_id)
+    finally:
+        sess.close()
 
+    if not result:
+        raise RuntimeError('Google Drive returned no folder contents')
+
+    _folder_name, children = result
     files = []
-    for entry in entries:
-        name = entry.get('path', '')
-        url = entry.get('url', '')
-        # Ignore all subfolders and non-MP4 files.
-        if '/' in name or not name.lower().endswith('.mp4'):
+    skipped = []
+    for file_id, name, file_type in children:
+        if file_type == _GoogleDriveFile.TYPE_FOLDER:
+            skipped.append((name, 'folder'))
             continue
-        m = re.search(r'[?&]id=([\w-]+)', url)
-        if not m:
+        if not name.lower().endswith('.mp4'):
+            skipped.append((name, 'non-mp4'))
             continue
-        files.append({'id': m.group(1), 'name': Path(name).name, 'downloadUrl': url})
+        files.append({
+            'id': file_id,
+            'name': Path(name).name,
+            'downloadUrl': f'https://drive.google.com/uc?id={file_id}',
+        })
+
+    print(f'Found {len(files)} top-level MP4 files in Drive')
+    print(f'Ignored {len(skipped)} folders/non-MP4 entries')
     return files
 
 
@@ -76,7 +86,7 @@ def duration(path):
 
 
 def download_public_file(file, path):
-    """Download a public Drive file with gdown, including large-file confirmation handling."""
+    """Download a single public Drive file with gdown."""
     try:
         result = gdown.download(
             url=file['downloadUrl'],
@@ -93,52 +103,74 @@ def download_public_file(file, path):
 
 def main():
     manifest = load_json(MANIFEST, {'version': 1, 'files': {}})
+    manifest.setdefault('files', {})
     files = list_files()
-    print(f'Found {len(files)} top-level MP4 files in Drive')
     pending = [f for f in files if f.get('id') not in manifest['files']]
     print(f'{len(pending)} new MP4 files pending')
 
-    for f in pending[:MAX_FILES]:
+    migrated = 0
+    failed = 0
+    for f in pending:
+        if migrated >= MAX_FILES:
+            break
         name = f['name']
         ts = timestamp(name)
         if not ts:
             print(f'SKIP timestamp: {name}')
             continue
+
         day = ts[:10]
         tag = day
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / name
             print(f'Downloading {name}')
-            download_public_file(f, path)
-            actual = path.stat().st_size
-            print(f'Downloaded {name}: {actual} bytes')
+            try:
+                download_public_file(f, path)
+                actual = path.stat().st_size
+                if actual <= 0:
+                    raise RuntimeError('downloaded file is empty')
+                print(f'Downloaded {name}: {actual} bytes')
 
-            exists = subprocess.run(
-                ['gh', 'release', 'view', tag, '--repo', REPO],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            ).returncode == 0
-            if not exists:
+                exists = subprocess.run(
+                    ['gh', 'release', 'view', tag, '--repo', REPO],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                ).returncode == 0
+                if not exists:
+                    subprocess.run([
+                        'gh', 'release', 'create', tag, '--repo', REPO,
+                        '--title', f'Wildlife {day}',
+                        '--notes', f'Wildlife camera recordings for {day}.'
+                    ], check=True)
+
                 subprocess.run([
-                    'gh', 'release', 'create', tag, '--repo', REPO,
-                    '--title', f'Wildlife {day}',
-                    '--notes', f'Wildlife camera recordings for {day}.'
+                    'gh', 'release', 'upload', tag, str(path), '--repo', REPO
                 ], check=True)
+                d = duration(path)
+                asset = f'https://github.com/{REPO}/releases/download/{tag}/{name}'
+                manifest['files'][f['id']] = {
+                    'id': f['id'], 'name': name, 'size': actual,
+                    'modifiedTime': None, 'startTime': ts,
+                    'duration': d, 'releaseTag': tag, 'url': asset, 'verified': True
+                }
+                MANIFEST.write_text(
+                    json.dumps(manifest, indent=2, ensure_ascii=False) + '\n'
+                )
+                build_index(manifest)
+                migrated += 1
+                print(f'MIGRATED {migrated}/{MAX_FILES}: {name}')
+            except Exception as exc:
+                failed += 1
+                print(f'FAILED {name}: {exc}')
+                print('Continuing to the next MP4 instead of aborting the whole batch.')
 
-            subprocess.run(['gh', 'release', 'upload', tag, str(path), '--repo', REPO], check=True)
-            d = duration(path)
-            asset = f'https://github.com/{REPO}/releases/download/{tag}/{name}'
-            manifest['files'][f['id']] = {
-                'id': f['id'], 'name': name, 'size': actual,
-                'modifiedTime': f.get('modifiedTime'), 'startTime': ts,
-                'duration': d, 'releaseTag': tag, 'url': asset, 'verified': True
-            }
-            MANIFEST.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n')
-            build_index(manifest)
-            subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
-            subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
-            subprocess.run(['git', 'add', str(MANIFEST), str(INDEX)], check=True)
-            subprocess.run(['git', 'commit', '-m', f'Index migrated recording {name}'], check=False)
-            subprocess.run(['git', 'push'], check=True)
+    if migrated or failed:
+        subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
+        subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+        subprocess.run(['git', 'add', str(MANIFEST), str(INDEX)], check=True)
+        subprocess.run(['git', 'commit', '-m', f'Migrate {migrated} wildlife recordings'], check=False)
+        subprocess.run(['git', 'push'], check=True)
+
+    print(f'Batch complete: migrated={migrated}, failed={failed}, requested={MAX_FILES}')
 
 
 def build_index(manifest):
@@ -151,7 +183,9 @@ def build_index(manifest):
         })
     for d in days:
         days[d].sort(key=lambda x: x['startTime'])
-    INDEX.write_text(json.dumps({'version': 1, 'days': dict(sorted(days.items()))}, indent=2, ensure_ascii=False) + '\n')
+    INDEX.write_text(
+        json.dumps({'version': 1, 'days': dict(sorted(days.items()))}, indent=2, ensure_ascii=False) + '\n'
+    )
 
 
 if __name__ == '__main__':
