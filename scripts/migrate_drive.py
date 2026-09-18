@@ -1,8 +1,12 @@
 import json, os, re, subprocess, tempfile
 from pathlib import Path
 import requests
+import gdown
 
-INDEX_URL = os.environ['DRIVE_INDEX_URL']
+FOLDER_URL = os.environ.get(
+    'DRIVE_FOLDER_URL',
+    'https://drive.google.com/drive/folders/11Z1EHFmU9Qj64CpHgD6uM2MG-SLc9YTI?usp=drive_link'
+)
 MAX_FILES = int(os.getenv('MAX_FILES', '3'))
 REPO = os.environ['GITHUB_REPOSITORY']
 MANIFEST = Path('data/transfer-manifest.json')
@@ -17,12 +21,41 @@ def load_json(path, default):
 
 
 def list_files():
-    r = requests.get(INDEX_URL, timeout=60)
-    r.raise_for_status()
-    data = r.json()
-    if isinstance(data, dict) and 'files' in data:
-        data = data['files']
-    return [x for x in data if x.get('name', '').lower().endswith('.mp4')]
+    """List only top-level MP4s in the shared Drive folder.
+
+    gdown uses Drive's embedded folder view and supports folders larger than
+    the old 50-file limit. Subfolders are deliberately excluded by requiring
+    a top-level path (no '/').
+    """
+    result = subprocess.run(
+        ['gdown', FOLDER_URL, '--json', '--quiet'],
+        capture_output=True, text=True, timeout=180
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            'Google Drive folder listing failed. '
+            f'exit={result.returncode}\nstdout={result.stdout[-2000:]}\nstderr={result.stderr[-4000:]}'
+        )
+    try:
+        entries = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            'Google Drive folder listing did not return JSON. '
+            f'stdout={result.stdout[-4000:]}\nstderr={result.stderr[-2000:]}'
+        ) from exc
+
+    files = []
+    for entry in entries:
+        name = entry.get('path', '')
+        url = entry.get('url', '')
+        # Ignore all subfolders and non-MP4 files.
+        if '/' in name or not name.lower().endswith('.mp4'):
+            continue
+        m = re.search(r'[?&]id=([\w-]+)', url)
+        if not m:
+            continue
+        files.append({'id': m.group(1), 'name': Path(name).name, 'downloadUrl': url})
+    return files
 
 
 def timestamp(name):
@@ -34,33 +67,34 @@ def duration(path):
     p = subprocess.run(
         ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
          '-of', 'default=noprint_wrappers=1:nokey=1', str(path)],
-        capture_output=True, text=True)
+        capture_output=True, text=True
+    )
     try:
         return round(float(p.stdout.strip()), 3)
     except Exception:
         return None
 
 
-def download_public_file(file):
-    file_id = file['id']
-    urls = [file.get('downloadUrl'), f'https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t']
-    last = None
-    for url in urls:
-        if not url:
-            continue
-        try:
-            with requests.get(url, stream=True, timeout=180, allow_redirects=True) as r:
-                r.raise_for_status()
-                return r
-        except Exception as exc:
-            last = exc
-    raise RuntimeError(f'Unable to download {file.get("name")}: {last}')
+def download_public_file(file, path):
+    """Download a public Drive file with gdown, including large-file confirmation handling."""
+    try:
+        result = gdown.download(
+            url=file['downloadUrl'],
+            output=str(path),
+            quiet=False,
+            resume=True,
+            use_cookies=False,
+        )
+        if not result:
+            raise RuntimeError('gdown returned no output path')
+    except Exception as exc:
+        raise RuntimeError(f'Unable to download {file["name"]}: {exc}') from exc
 
 
 def main():
     manifest = load_json(MANIFEST, {'version': 1, 'files': {}})
     files = list_files()
-    print(f'Found {len(files)} MP4 files')
+    print(f'Found {len(files)} top-level MP4 files in Drive')
     pending = [f for f in files if f.get('id') not in manifest['files']]
     print(f'{len(pending)} new MP4 files pending')
 
@@ -75,18 +109,14 @@ def main():
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / name
             print(f'Downloading {name}')
-            with download_public_file(f) as response, path.open('wb') as out:
-                for chunk in response.iter_content(1024 * 1024):
-                    if chunk:
-                        out.write(chunk)
+            download_public_file(f, path)
             actual = path.stat().st_size
-            expected = f.get('size')
-            if expected and actual != int(expected):
-                raise RuntimeError(f'Size mismatch for {name}: {actual} != {expected}')
+            print(f'Downloaded {name}: {actual} bytes')
 
             exists = subprocess.run(
                 ['gh', 'release', 'view', tag, '--repo', REPO],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            ).returncode == 0
             if not exists:
                 subprocess.run([
                     'gh', 'release', 'create', tag, '--repo', REPO,
