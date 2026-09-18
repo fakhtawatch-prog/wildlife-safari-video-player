@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wildlife Safari</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><div><h1>Wildlife Safari</h1><p>Watch what happened around the nest.</p></div><button id="fullscreenBtn">Fullscreen</button></header>
+<main>
+<section class="daybar"><label for="dateSelect">Date</label><select id="dateSelect"></select><span id="dayStats"></span></section>
+<section class="player"><video id="video" controls preload="metadata" playsinline></video><div id="videoStatus"></div></section>
+<section class="controls"><button id="activityBtn">Zoom to Activity</button><button id="timelineBtn">Hide Timeline</button><button id="prevBtn">Previous</button><button id="nextBtn">Next</button><label>Video <input id="videoVolume" type="range" min="0" max="1" step="0.01" value="1"></label><label>Music <input id="musicVolume" type="range" min="0" max="1" step="0.01" value="0.35"></label><button id="musicBtn">Music: OFF</button></section>
+<section id="timelineSection"><div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div><div id="timeline" class="timeline"></div></section>
+<section class="chapters"><h2>Chapters</h2><div id="chapters"></div></section>
+</main>
+<audio id="music" preload="none" loop></audio>
+<script src="app.js"></script>
+</body></html>
