@@ -1,7 +1,13 @@
 const $=s=>document.querySelector(s);
-const state={index:null,date:null,i:-1,activity:false,musicOn:false,musicIndex:0,musicSounds:[],musicReady:false,descriptions:{}};
+const state={index:null,date:null,i:-1,activity:false,musicOn:false,musicIndex:0,musicSounds:[],musicReady:false,musicMode:'scott',scottIndex:0,guestCursor:0,descriptions:{}};
 const video=$('#video'),select=$('#dateSelect'),timeline=$('#timeline');
 const musicWidget=window.SC?SC.Widget($('#scMusic')):null;
+const guestTracks=[
+ {url:'https://soundcloud.com/trackistador/kevin-macleod-air-prelude',title:'Air Prelude — Kevin MacLeod',credit:'Kevin MacLeod · CC BY 3.0'},
+ {url:'https://soundcloud.com/sei_peridot/gentle-harp',title:'Gentle Harp — PeriTune',credit:'PeriTune · CC BY'},
+ {url:'https://soundcloud.com/trackistador/kevin-macleod-expeditionary',title:'Expeditionary — Kevin MacLeod',credit:'Kevin MacLeod · CC BY 4.0'},
+ {url:'https://soundcloud.com/trackistador/kevin-macleod-midnight-tale',title:'Midnight Tale — Kevin MacLeod',credit:'Kevin MacLeod · CC BY 4.0'}
+];
 function fmt(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return h?`${h}h ${m}m ${s}s`:`${m}m ${s}s`}
 function fmtTime(iso){return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})}
 function dayItems(){return state.index?.days?.[state.date]||[]}
@@ -11,6 +17,7 @@ function renderDescription(x){ensureDescriptionPanel();const d=descriptionFor(x)
 function renderDays(){const days=Object.keys(state.index?.days||{}).sort();select.innerHTML=days.length?days.map(d=>`<option value="${d}">${new Date(d+'T00:00:00').toLocaleDateString([], {month:'long',day:'numeric',year:'numeric'})}</option>`).join(''):'<option>No footage imported</option>';state.date=new URLSearchParams(location.search).get('date')||days[0]||null;if(state.date&&!state.index.days[state.date])state.date=days[0];if(state.date)select.value=state.date;renderDay()}
 function renderDay(){const a=dayItems();state.i=-1;const total=a.reduce((x,y)=>x+(y.duration||0),0);$('#dayStats').textContent=a.length?`${a.length} recordings · ${fmt(total)} footage · ${fmtTime(a[0].startTime)} → ${fmtTime(a[a.length-1].startTime)}`:'No imported footage yet';timeline.innerHTML='';a.forEach((x,i)=>{const d=new Date(x.startTime),start=d.getHours()*3600+d.getMinutes()*60+d.getSeconds(),left=start/86400*100,width=Math.max((x.duration||1)/86400*100,.18);const b=document.createElement('button');b.className='clip';b.style.left=left+'%';b.style.width=width+'%';b.title=`${fmtTime(x.startTime)} · ${fmt(x.duration||0)}`;b.dataset.i=i;b.onclick=()=>load(i,true);timeline.appendChild(b)});renderChapters();renderDescription(null);$('#videoStatus').textContent=a.length?'Select a recording to begin.':'The library is ready. Waiting for the first migrated MP4.';video.removeAttribute('src');video.load()}
 function load(i,play=false){const a=dayItems();if(!a[i])return;state.i=i;document.querySelectorAll('.clip').forEach((e,j)=>e.classList.toggle('active',j===i));video.src=a[i].url;video.load();$('#videoStatus').textContent=`${fmtTime(a[i].startTime)} · ${a[i].name}`;renderDescription(a[i]);if(play)video.play().catch(()=>{})}
+video.addEventListener('play',()=>{if(!state.musicOn){state.musicOn=true;$('#musicBtn').textContent='Music: ON';playMusicFromGesture();}});
 video.addEventListener('ended',()=>{if(state.i<dayItems().length-1)load(state.i+1,true)});
 video.addEventListener('volumechange',()=>$('#videoVolume').value=video.volume);$('#videoVolume').oninput=e=>video.volume=+e.target.value;
 $('#nextBtn').onclick=()=>state.i>=0&&load(Math.min(state.i+1,dayItems().length-1),true);$('#prevBtn').onclick=()=>state.i>=0&&load(Math.max(state.i-1,0),true);
@@ -22,9 +29,12 @@ document.addEventListener('keydown',e=>{if(['INPUT','SELECT','BUTTON'].includes(
 function renderChapters(){const c=$('#chapters');c.innerHTML=dayItems().length?'<p style="color:#888">Chapter controls will appear when chapter metadata is populated.</p>':'<p style="color:#888">Chapters will appear with imported footage.</p>'}
 function musicReady(){if(!musicWidget)return;state.musicReady=true;musicWidget.getSounds(sounds=>{state.musicSounds=sounds||[];const total=state.musicSounds.reduce((sum,s)=>sum+(Number(s.duration)||0),0)/1000;$('#musicTrack').textContent=`Music: Scott Buckley · ${state.musicSounds.length} tracks · ${fmt(total)} available`;});musicWidget.setVolume(Math.round((+$('#musicVolume').value)*100));}
 function updateMusicLabel(){if(!state.musicOn){$('#musicTrack').textContent='Music is off.';return;}musicWidget?.getCurrentSound(sound=>{if(sound?.title)$('#musicTrack').textContent=`Music: ${sound.title} — ${sound.user?.username||'Scott Buckley'}`;});}
-if(musicWidget){musicWidget.bind(SC.Widget.Events.READY,musicReady);musicWidget.bind(SC.Widget.Events.PLAY,updateMusicLabel);musicWidget.bind(SC.Widget.Events.FINISH,()=>{if(!state.musicOn)return;if(!state.musicSounds.length){musicWidget.next();return;}musicWidget.getCurrentSoundIndex(index=>{if(index>=state.musicSounds.length-1)musicWidget.skip(0);else musicWidget.next();});});musicWidget.bind(SC.Widget.Events.ERROR,e=>console.error('Music widget error',e));}
+function playMusicFromGesture(){if(!musicWidget)return;if(!state.musicReady){setTimeout(playMusicFromGesture,250);return;}musicWidget.play();updateMusicLabel();}
+function loadScott(index,auto=true){if(!state.musicSounds.length)return;state.musicMode='scott';state.scottIndex=(index+state.musicSounds.length)%state.musicSounds.length;const s=state.musicSounds[state.scottIndex];if(s?.permalink_url)musicWidget.load(s.permalink_url,{auto_play:auto});else musicWidget.skip(state.scottIndex)}
+function loadGuest(auto=true){const g=guestTracks[state.guestCursor%guestTracks.length];state.guestCursor++;state.musicMode='guest';$('#musicTrack').textContent=`Music: ${g.title} · ${g.credit}`;musicWidget.load(g.url,{auto_play:auto});}
+if(musicWidget){musicWidget.bind(SC.Widget.Events.READY,musicReady);musicWidget.bind(SC.Widget.Events.PLAY,updateMusicLabel);musicWidget.bind(SC.Widget.Events.FINISH,()=>{if(!state.musicOn)return;if(state.musicMode==='guest'){loadScott(state.scottIndex+1,true);return;}const next=state.scottIndex+1;if(next>=state.musicSounds.length){loadScott(0,true);return;}if(next>0&&next%6===0)loadGuest(true);else loadScott(next,true);});musicWidget.bind(SC.Widget.Events.ERROR,e=>console.error('Music widget error',e));}
 $('#musicVolume').oninput=e=>musicWidget?.setVolume(Math.round((+e.target.value)*100));
-$('#musicBtn').onclick=()=>{if(!musicWidget)return;if(state.musicOn){state.musicOn=false;musicWidget.pause();$('#musicBtn').textContent='Music: OFF';$('#musicTrack').textContent='Music is off.';}else{state.musicOn=true;$('#musicBtn').textContent='Music: ON';musicWidget.play();updateMusicLabel();}};
+$('#musicBtn').onclick=()=>{if(!musicWidget)return;if(state.musicOn){state.musicOn=false;musicWidget.pause();$('#musicBtn').textContent='Music: OFF';$('#musicTrack').textContent='Music is off.';}else{state.musicOn=true;$('#musicBtn').textContent='Music: ON';playMusicFromGesture();}};
 Promise.all([
  fetch('data/wildlife-index.json').then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}),
  fetch('data/clip-descriptions.json').then(r=>r.ok?r.json():{}).catch(()=>({}))
