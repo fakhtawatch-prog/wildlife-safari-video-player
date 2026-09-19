@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wildlife Safari — Editor</title><link rel="stylesheet" href="styles.css"></head>
 <body><header><div><h1>Wildlife Safari Editor</h1><p>Private editor for clip descriptions.</p></div><a href="./">Back to viewer</a></header><main><section class="panel"><h2>Sign in</h2><p id="authStatus">This editor uses GitHub authorization. Only the repository owner should authorize it.</p><button id="loginBtn">Sign in with GitHub</button></section><section class="panel" id="editor" hidden><h2>Clip descriptions</h2><label for="clipSelect">Recording</label><select id="clipSelect"></select><label for="desc">Description</label><textarea id="desc" rows="8" placeholder="Enter the description viewers should see..."></textarea><button id="saveBtn">Save description</button><span id="saveStatus"></span></section></main><script>
-const CONFIG={clientId:'__GITHUB_APP_CLIENT_ID__',callback:location.origin+location.pathname,backend:'https://script.google.com/macros/s/AKfycbwr9xDOAFFUPCHGn_0ideK37d4FuSNS2MB0c3IS1JeSw6r_sOgdt2ACrSFrPMa-Zn7nxg/exec'};
+const CONFIG={clientId:'Iv23li8zElHSDNmxcFCa',callback:location.origin+location.pathname,backend:'https://script.google.com/macros/s/AKfycbwr9xDOAFFUPCHGn_0ideK37d4FuSNS2MB0c3IS1JeSw6r_sOgdt2ACrSFrPMa-Zn7nxg/exec'};
 const repo='fakhtawatch-prog/wildlife-safari-video-player',file='data/clip-descriptions.json';
 const $=s=>document.querySelector(s);
 function rand(n=32){const a=new Uint8Array(n);crypto.getRandomValues(a);return [...a].map(x=>x.toString(16).padStart(2,'0')).join('')}
